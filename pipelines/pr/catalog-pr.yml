@@ -1,0 +1,42 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- checkout: self
+
+- task: UseDotNet@2
+  displayName: Install .NET 10 SDK
+  inputs:
+    packageType: sdk
+    version: 10.x
+
+- task: DotNetCoreCLI@2
+  displayName: Restore Catalog solution
+  inputs:
+    command: restore
+    projects: server/catalog-service/Catalog.slnx
+
+- task: DotNetCoreCLI@2
+  displayName: Build Catalog solution
+  inputs:
+    command: build
+    projects: server/catalog-service/Catalog.slnx
+    arguments: '--configuration Release --no-restore'
+
+- task: DotNetCoreCLI@2
+  displayName: Run Catalog unit tests
+  inputs:
+    command: test
+    projects: server/catalog-service/Catalog.slnx
+    arguments: '--configuration Release --no-build --no-restore --logger trx --results-directory $(Agent.TempDirectory)/TestResults'
+
+- task: PublishTestResults@2
+  displayName: Publish Catalog test results
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFormat: VSTest
+    searchFolder: '$(Agent.TempDirectory)/TestResults'
+    testResultsFiles: '**/*.trx'
+    failTaskOnFailedTests: true
