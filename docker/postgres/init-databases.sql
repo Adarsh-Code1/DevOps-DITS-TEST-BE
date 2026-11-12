@@ -1,0 +1,6 @@
+CREATE DATABASE "CatalogDb";
+CREATE DATABASE "CustomersDb";
+CREATE DATABASE "IdentityDb";
+CREATE DATABASE "InventoryDb";
+CREATE DATABASE "NotificationsDb";
+CREATE DATABASE "OrderingDb";

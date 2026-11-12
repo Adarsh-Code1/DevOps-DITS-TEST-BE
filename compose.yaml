@@ -1,0 +1,367 @@
+
+name: devops-test-store
+
+services:
+
+  # -------------------------
+  # INFRASTRUCTURE
+  # -------------------------
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: devops-store-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: devops-store-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: devops-store-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # -------------------------
+  # DATABASE MIGRATIONS
+  # -------------------------
+
+  migrate-catalog:
+    image: devops-store-catalog:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.catalog
+    command: ["--migrate"]
+    environment:
+      ASPNETCORE_URLS: http://+:5001
+      ConnectionStrings__CatalogDb: Host=postgres;Port=5432;Database=CatalogDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-customer:
+    image: devops-store-customer:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.customer
+    command: ["--migrate"]
+    environment:
+      ASPNETCORE_URLS: http://+:5002
+      ConnectionStrings__CustomersDb: Host=postgres;Port=5432;Database=CustomersDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-identity:
+    image: devops-store-identity:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.identity
+    command: ["--migrate"]
+    environment:
+      ASPNETCORE_URLS: http://+:5006
+      ConnectionStrings__IdentityDb: Host=postgres;Port=5432;Database=IdentityDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-inventory:
+    image: devops-store-inventory:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.inventory
+    command: ["--migrate"]
+    environment:
+      ASPNETCORE_URLS: http://+:5003
+      ConnectionStrings__InventoryDb: Host=postgres;Port=5432;Database=InventoryDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-order:
+    image: devops-store-order:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.order
+    command: ["--migrate"]
+    environment:
+      ASPNETCORE_URLS: http://+:5004
+      ConnectionStrings__OrderingDb: Host=postgres;Port=5432;Database=OrderingDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-notification:
+    image: devops-store-notification-api:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.notification-api
+    command: ["--migrate"]
+    environment:
+      ASPNETCORE_URLS: http://+:5005
+      ConnectionStrings__NotificationsDb: Host=postgres;Port=5432;Database=NotificationsDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # -------------------------
+  # BACKEND SERVICES
+  # -------------------------
+
+  identity:
+    image: devops-store-identity:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.identity
+    environment:
+      ASPNETCORE_URLS: http://+:5006
+      ConnectionStrings__IdentityDb: Host=postgres;Port=5432;Database=IdentityDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      Identity__SeedUsers__0__Email: ${ADMIN_EMAIL}
+      Identity__SeedUsers__0__DisplayName: ${ADMIN_DISPLAY_NAME}
+      Identity__SeedUsers__0__Password: ${ADMIN_PASSWORD}
+      Identity__SeedUsers__0__Roles__0: admin
+      Identity__SeedUsers__0__Roles__1: staff
+      Identity__SeedUsers__1__Email: ${STAFF_EMAIL}
+      Identity__SeedUsers__1__DisplayName: ${STAFF_DISPLAY_NAME}
+      Identity__SeedUsers__1__Password: ${STAFF_PASSWORD}
+      Identity__SeedUsers__1__Roles__0: staff
+    depends_on:
+      migrate-identity:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  catalog:
+    image: devops-store-catalog:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.catalog
+    environment:
+      ASPNETCORE_URLS: http://+:5001
+      ConnectionStrings__CatalogDb: Host=postgres;Port=5432;Database=CatalogDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379
+      Cache__Enabled: "true"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+    depends_on:
+      migrate-catalog:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  customer:
+    image: devops-store-customer:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.customer
+    environment:
+      ASPNETCORE_URLS: http://+:5002
+      ConnectionStrings__CustomersDb: Host=postgres;Port=5432;Database=CustomersDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+    depends_on:
+      migrate-customer:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  inventory:
+    image: devops-store-inventory:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.inventory
+    environment:
+      ASPNETCORE_URLS: http://+:5003
+      ConnectionStrings__InventoryDb: Host=postgres;Port=5432;Database=InventoryDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+    depends_on:
+      migrate-inventory:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  order:
+    image: devops-store-order:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.order
+    environment:
+      ASPNETCORE_URLS: http://+:5004
+      ConnectionStrings__OrderingDb: Host=postgres;Port=5432;Database=OrderingDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      Services__CatalogUrl: http://catalog:5001
+      Services__CustomerUrl: http://customer:5002
+      Services__InventoryUrl: http://inventory:5003
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+    depends_on:
+      migrate-order:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+      customer:
+        condition: service_started
+      inventory:
+        condition: service_started
+    restart: unless-stopped
+
+  notification-api:
+    image: devops-store-notification-api:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.notification-api
+    environment:
+      ASPNETCORE_URLS: http://+:5005
+      ConnectionStrings__NotificationsDb: Host=postgres;Port=5432;Database=NotificationsDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+    depends_on:
+      migrate-notification:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  notification-worker:
+    image: devops-store-notification-worker:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.notification-worker
+    environment:
+      ASPNETCORE_URLS: http://+:5007
+      ConnectionStrings__NotificationsDb: Host=postgres;Port=5432;Database=NotificationsDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+    depends_on:
+      migrate-notification:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # -------------------------
+  # API GATEWAY
+  # -------------------------
+
+  gateway:
+    image: devops-store-gateway:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gateway
+    ports:
+      - "5000:5000"
+    environment:
+      ASPNETCORE_URLS: http://+:5000
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      ReverseProxy__Clusters__identity__Destinations__primary__Address: http://identity:5006/
+      ReverseProxy__Clusters__catalog__Destinations__primary__Address: http://catalog:5001/
+      ReverseProxy__Clusters__customer__Destinations__primary__Address: http://customer:5002/
+      ReverseProxy__Clusters__inventory__Destinations__primary__Address: http://inventory:5003/
+      ReverseProxy__Clusters__order__Destinations__primary__Address: http://order:5004/
+      ReverseProxy__Clusters__notification__Destinations__primary__Address: http://notification-api:5005/
+      ReverseProxy__Clusters__notification-worker__Destinations__primary__Address: http://notification-worker:5007/
+    depends_on:
+      identity:
+        condition: service_started
+      catalog:
+        condition: service_started
+      customer:
+        condition: service_started
+      inventory:
+        condition: service_started
+      order:
+        condition: service_started
+      notification-api:
+        condition: service_started
+      notification-worker:
+        condition: service_started
+    restart: unless-stopped
+
+  # -------------------------
+  # FRONTEND SERVICES
+  # -------------------------
+
+  store-frontend:
+    image: devops-store-frontend:latest
+    build:
+      context: ../DevOps-DITS-TEST-FE
+      dockerfile: docker/Dockerfile.store
+    ports:
+      - "4200:4200"
+    environment:
+      API_BASE_URL: ${API_BASE_URL}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT}
+    depends_on:
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+  admin-portal:
+    image: devops-store-admin:latest
+    build:
+      context: ../DevOps-DITS-TEST-FE
+      dockerfile: docker/Dockerfile.admin
+    ports:
+      - "4300:4300"
+    environment:
+      API_BASE_URL: ${API_BASE_URL}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT}
+    depends_on:
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+# -------------------------
+# PERSISTENT VOLUMES
+# -------------------------
+
+volumes:
+  postgres-data:

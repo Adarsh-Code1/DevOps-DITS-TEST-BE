@@ -1,0 +1,30 @@
+# Stage 1: Build and publish the Inventory API
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+# Copy backend source code and internal BuildingBlocks packages
+COPY server/ ./server/
+
+# Restore Inventory API dependencies
+RUN dotnet restore server/inventory-service/src/Inventory.Api/Inventory.Api.csproj \
+    --configfile server/inventory-service/nuget.config
+
+# Publish Inventory API
+RUN dotnet publish server/inventory-service/src/Inventory.Api/Inventory.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:5003
+
+EXPOSE 5003
+
+ENTRYPOINT ["dotnet", "Inventory.Api.dll"]

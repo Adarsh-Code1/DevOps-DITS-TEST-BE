@@ -1,0 +1,30 @@
+# Stage 1: Build and publish the Identity API
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+# Copy backend source code and internal BuildingBlocks packages
+COPY server/ ./server/
+
+# Restore Identity API dependencies
+RUN dotnet restore server/identity-service/src/Identity.Api/Identity.Api.csproj \
+    --configfile server/identity-service/nuget.config
+
+# Publish Identity API
+RUN dotnet publish server/identity-service/src/Identity.Api/Identity.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:5006
+
+EXPOSE 5006
+
+ENTRYPOINT ["dotnet", "Identity.Api.dll"]

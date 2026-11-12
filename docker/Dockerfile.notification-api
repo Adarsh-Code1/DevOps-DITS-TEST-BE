@@ -1,0 +1,29 @@
+# Stage 1: Build and publish the Notifications API
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+COPY server/ ./server/
+
+# Restore Notifications API dependencies
+RUN dotnet restore server/notification-service/src/Notifications.Api/Notifications.Api.csproj \
+    --configfile server/notification-service/nuget.config
+
+# Publish Notifications API
+RUN dotnet publish server/notification-service/src/Notifications.Api/Notifications.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:5005
+
+EXPOSE 5005
+
+ENTRYPOINT ["dotnet", "Notifications.Api.dll"]

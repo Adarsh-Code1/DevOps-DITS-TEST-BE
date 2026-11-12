@@ -1,0 +1,30 @@
+# Stage 1: Build and publish the Ordering API
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+# Copy backend source code and internal BuildingBlocks packages
+COPY server/ ./server/
+
+# Restore Ordering API dependencies
+RUN dotnet restore server/order-service/src/Ordering.Api/Ordering.Api.csproj \
+    --configfile server/order-service/nuget.config
+
+# Publish Ordering API
+RUN dotnet publish server/order-service/src/Ordering.Api/Ordering.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:5004
+
+EXPOSE 5004
+
+ENTRYPOINT ["dotnet", "Ordering.Api.dll"]

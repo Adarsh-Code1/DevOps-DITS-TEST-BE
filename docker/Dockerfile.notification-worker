@@ -1,0 +1,27 @@
+# Stage 1: Build and publish Notification Worker
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+COPY server/ ./server/
+
+RUN dotnet restore server/notification-service/src/Notifications.Worker/Notifications.Worker.csproj \
+    --configfile server/notification-service/nuget.config
+
+RUN dotnet publish server/notification-service/src/Notifications.Worker/Notifications.Worker.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:5007
+
+EXPOSE 5007
+
+ENTRYPOINT ["dotnet", "Notifications.Worker.dll"]

@@ -1,0 +1,30 @@
+# Stage 1: Build and publish the Catalog API
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+# Copy backend source code and internal NuGet packages
+COPY server/ ./server/
+
+# Restore dependencies using the service NuGet configuration
+RUN dotnet restore server/catalog-service/src/Catalog.Api/Catalog.Api.csproj \
+    --configfile server/catalog-service/nuget.config
+
+# Publish the application
+RUN dotnet publish server/catalog-service/src/Catalog.Api/Catalog.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish
+
+# Stage 2: Run using the smaller ASP.NET runtime image
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:5001
+
+EXPOSE 5001
+
+ENTRYPOINT ["dotnet", "Catalog.Api.dll"]

@@ -1,0 +1,30 @@
+# Stage 1: Build and publish the Customers API
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+# Copy backend source code and internal BuildingBlocks packages
+COPY server/ ./server/
+
+# Restore Customers API dependencies
+RUN dotnet restore server/customer-service/src/Customers.Api/Customers.Api.csproj \
+    --configfile server/customer-service/nuget.config
+
+# Publish Customers API
+RUN dotnet publish server/customer-service/src/Customers.Api/Customers.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:5002
+
+EXPOSE 5002
+
+ENTRYPOINT ["dotnet", "Customers.Api.dll"]

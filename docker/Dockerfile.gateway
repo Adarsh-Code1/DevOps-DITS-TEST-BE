@@ -1,0 +1,31 @@
+
+# Stage 1: Build and publish Gateway API
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+# Copy backend source code and internal BuildingBlocks packages
+COPY server/ ./server/
+
+# Restore Gateway dependencies
+RUN dotnet restore server/gateway/src/Gateway.Api/Gateway.Api.csproj \
+    --configfile server/gateway/nuget.config
+
+# Publish Gateway
+RUN dotnet publish server/gateway/src/Gateway.Api/Gateway.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:5000
+
+EXPOSE 5000
+
+ENTRYPOINT ["dotnet", "Gateway.Api.dll"]
