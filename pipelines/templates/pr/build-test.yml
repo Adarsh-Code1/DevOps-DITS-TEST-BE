@@ -1,0 +1,40 @@
+parameters:
+  - name: solution
+    type: string
+
+  - name: nugetConfig
+    type: string
+
+steps:
+  - task: UseDotNet@2
+    displayName: Install .NET 10 SDK
+    inputs:
+      packageType: sdk
+      version: 10.x
+
+  - script: dotnet pack server/building-blocks/BuildingBlocks.slnx --configuration Release
+    displayName: Build and pack shared BuildingBlocks
+
+  - script: dotnet restore ${{ parameters.solution }} --configfile ${{ parameters.nugetConfig }}
+    displayName: Restore solution
+
+  - task: DotNetCoreCLI@2
+    displayName: Build solution
+    inputs:
+      command: build
+      projects: ${{ parameters.solution }}
+      arguments: '--configuration Release --no-restore'
+
+  - task: DotNetCoreCLI@2
+    displayName: Run unit tests and collect coverage
+    inputs:
+      command: test
+      projects: ${{ parameters.solution }}
+      arguments: '--configuration Release --no-build --no-restore --collect:"XPlat Code Coverage"'
+      publishTestResults: true
+
+  - task: PublishCodeCoverageResults@2
+    displayName: Publish code coverage
+    inputs:
+      summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+      failIfCoverageEmpty: true

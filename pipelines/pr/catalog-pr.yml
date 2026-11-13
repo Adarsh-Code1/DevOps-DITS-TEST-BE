@@ -1,4 +1,3 @@
-
 trigger: none
 
 pool:
@@ -7,29 +6,7 @@ pool:
 steps:
 - checkout: self
 
-- task: UseDotNet@2
-  displayName: Install .NET 10 SDK
-  inputs:
-    packageType: sdk
-    version: 10.x
-
-- script: dotnet pack server/building-blocks/BuildingBlocks.slnx --configuration Release
-  displayName: Build and pack shared BuildingBlocks
-
-- script: dotnet restore server/catalog-service/Catalog.slnx --configfile server/catalog-service/nuget.config
-  displayName: Restore Catalog solution using local feed
-
-- task: DotNetCoreCLI@2
-  displayName: Build Catalog solution
-  inputs:
-    command: build
-    projects: server/catalog-service/Catalog.slnx
-    arguments: '--configuration Release --no-restore'
-
-- task: DotNetCoreCLI@2
-  displayName: Run Catalog unit tests
-  inputs:
-    command: test
-    projects: server/catalog-service/Catalog.slnx
-    arguments: '--configuration Release --no-build --no-restore'
-    publishTestResults: true
+- template: ../templates/pr/build-test.yml
+  parameters:
+    solution: server/catalog-service/Catalog.slnx
+    nugetConfig: server/catalog-service/nuget.config
