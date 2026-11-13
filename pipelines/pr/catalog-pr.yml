@@ -1,3 +1,4 @@
+
 trigger: none
 
 pool:
@@ -12,11 +13,15 @@ steps:
     packageType: sdk
     version: 10.x
 
+- script: dotnet pack server/building-blocks/BuildingBlocks.slnx --configuration Release
+  displayName: Build and pack shared BuildingBlocks
+
 - task: DotNetCoreCLI@2
   displayName: Restore Catalog solution
   inputs:
     command: restore
     projects: server/catalog-service/Catalog.slnx
+    arguments: '--configfile server/catalog-service/nuget.config'
 
 - task: DotNetCoreCLI@2
   displayName: Build Catalog solution
