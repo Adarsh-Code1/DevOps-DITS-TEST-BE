@@ -31,13 +31,5 @@ steps:
   inputs:
     command: test
     projects: server/catalog-service/Catalog.slnx
-    arguments: '--configuration Release --no-build --no-restore --logger trx --results-directory $(Agent.TempDirectory)/TestResults'
-
-- task: PublishTestResults@2
-  displayName: Publish Catalog test results
-  condition: succeededOrFailed()
-  inputs:
-    testResultsFormat: VSTest
-    searchFolder: '$(Agent.TempDirectory)/TestResults'
-    testResultsFiles: '**/*.trx'
-    failTaskOnFailedTests: true
+    arguments: '--configuration Release --no-build --no-restore'
+    publishTestResults: true
