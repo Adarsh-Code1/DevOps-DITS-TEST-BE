@@ -16,12 +16,8 @@ steps:
 - script: dotnet pack server/building-blocks/BuildingBlocks.slnx --configuration Release
   displayName: Build and pack shared BuildingBlocks
 
-- task: DotNetCoreCLI@2
-  displayName: Restore Catalog solution
-  inputs:
-    command: restore
-    projects: server/catalog-service/Catalog.slnx
-    arguments: '--configfile server/catalog-service/nuget.config'
+- script: dotnet restore server/catalog-service/Catalog.slnx --configfile server/catalog-service/nuget.config
+  displayName: Restore Catalog solution using local feed
 
 - task: DotNetCoreCLI@2
   displayName: Build Catalog solution
