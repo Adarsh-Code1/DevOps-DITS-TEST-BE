@@ -5,6 +5,9 @@ parameters:
   - name: nugetConfig
     type: string
 
+  - name: scanSource
+    type: string
+
 steps:
   - task: UseDotNet@2
     displayName: Install .NET 10 SDK
@@ -38,3 +41,21 @@ steps:
     inputs:
       summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
       failIfCoverageEmpty: true
+
+  - script: |
+      mkdir -p "$(Build.SourcesDirectory)/reports/owasp-depscan"
+
+      docker run --rm \
+        -v "$(Build.SourcesDirectory):/app" \
+        public.ecr.aws/appthreat/dep-scan:latest \
+        --src "/app/${{ parameters.scanSource }}" \
+        --reports-dir /app/reports/owasp-depscan
+    displayName: Run OWASP Dependency Scan
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish OWASP Scan Reports
+    condition: always()
+    inputs:
+      targetPath: '$(Build.SourcesDirectory)/reports/owasp-depscan'
+      artifact: 'owasp-depscan-report'
+      publishLocation: pipeline

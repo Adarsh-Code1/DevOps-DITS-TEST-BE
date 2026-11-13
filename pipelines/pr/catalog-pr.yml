@@ -4,9 +4,10 @@ pool:
   vmImage: ubuntu-latest
 
 steps:
-- checkout: self
+  - checkout: self
 
-- template: ../templates/pr/build-test.yml
-  parameters:
-    solution: server/catalog-service/Catalog.slnx
-    nugetConfig: server/catalog-service/nuget.config
+  - template: ../templates/pr/build-test.yml
+    parameters:
+      solution: server/catalog-service/Catalog.slnx
+      nugetConfig: server/catalog-service/nuget.config
+      scanSource: server/catalog-service

@@ -32,3 +32,6 @@ client/.angular/
 
 # Build cache
 **/.cache/
+
+# OWASP dependency scan reports
+reports/
